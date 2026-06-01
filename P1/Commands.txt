@@ -1,0 +1,23 @@
+vagrant@badass:~$ docker container ls
+CONTAINER ID   IMAGE                  COMMAND                  CREATED          STATUS         PORTS     NAMES
+e6f3fe785d89   badass-router:latest   "/gns3/init.sh sh -c…"   10 minutes ago   Up 2 minutes             GNS3.router_hnaciri-1.53dddf11-49a2-4fb4-bb7b-8302264da7d6
+cfb65144ee86   badass-host:latest     "/gns3/init.sh sh"       10 minutes ago   Up 2 minutes             GNS3.host_hnaciri-1.53dddf11-49a2-4fb4-bb7b-8302264da7d6
+vagrant@badass:~$ docker exec -it e6f3fe785d89 "ps" "-a"
+PID   USER     TIME  COMMAND
+    1 root      0:00 tail -f /dev/null
+   34 root      0:00 /gns3/bin/busybox sh -c while true; do TERM=vt100 /gns3/bin/busybox sh; done
+   41 root      0:00 /gns3/bin/busybox sh
+   53 root      0:00 /usr/lib/frr/watchfrr -d mgmtd zebra bgpd ospfd isisd staticd
+   71 frr       0:00 /usr/lib/frr/mgmtd -d -F traditional -A 127.0.0.1
+   73 frr       0:00 /usr/lib/frr/zebra -d -F traditional -A 127.0.0.1 -s 90000000
+   78 frr       0:00 /usr/lib/frr/bgpd -d -F traditional -A 127.0.0.1
+   85 frr       0:00 /usr/lib/frr/ospfd -d -F traditional -A 127.0.0.1
+   88 frr       0:00 /usr/lib/frr/isisd -d -F traditional -A 127.0.0.1
+   91 frr       0:00 /usr/lib/frr/staticd -d -F traditional -A 127.0.0.1
+  130 root      0:00 ps -a
+vagrant@badass:~$ docker exec -it cfb65144ee86 "ps" "-a"
+PID   USER     TIME  COMMAND
+    1 root      0:00 sh
+   34 root      0:00 /gns3/bin/busybox sh -c while true; do TERM=vt100 /gns3/bin/busybox sh; done
+   41 root      0:00 /gns3/bin/busybox sh
+   49 root      0:00 ps -a
