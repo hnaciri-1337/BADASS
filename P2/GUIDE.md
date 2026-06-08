@@ -56,6 +56,13 @@ A successful ping confirms that the underlay link is working before the VXLAN ov
 
 # 2 - Creating the bridge and VXLAN
 Now we create the "Magic." We need to take the physical interface facing the Host and bridge it into a VXLAN tunnel that goes to the other router.
+
+For the VXLAN interface, use one mode only. Do not run both `ip link add vxlan10` commands because they create the same VXLAN device.
+* Static mode uses `remote` when you know the other router IP.
+* Dynamic multicast mode uses `group` so routers using the same multicast group can discover each other through multicast traffic.
+
+Both routers must use the same VNI, multicast group if multicast mode is used, and destination port. For dynamic multicast mode, the underlay must also allow multicast traffic to `239.1.1.1`.
+
 ### On router 1
 ```bash
 # 1. Create a bridge (this acts like a virtual switch inside your router)
@@ -63,11 +70,13 @@ ip link add br0 type bridge
 ip link set br0 up
 
 # 2. Create the VXLAN interface
-# id 10: The Virtual Network Identifier (VNI)
-# remote 10.1.1.2: The destination (Router 2)
-# local 10.1.1.1: The source (Router 1)
-# dstport 4789: The standard port for VXLAN
+# Choose ONE mode:
+# Do not run both commands below.
+# Static mode (point-to-point)
 ip link add vxlan10 type vxlan id 10 dev eth1 remote 10.1.1.2 local 10.1.1.1 dstport 4789
+
+# Dynamic multicast mode (multicast discovery)
+ip link add vxlan10 type vxlan id 10 dev eth1 group 239.1.1.1 local 10.1.1.1 dstport 4789
 ip link set vxlan10 up
 
 # 3. Connect the Host-facing interface (e.g., eth2) and the VXLAN to the bridge
@@ -76,7 +85,7 @@ ip link set vxlan10 master br0
 ```
 
 ### Purpose
-Create the VXLAN overlay on Router 1 by building a bridge and a VNI 10 tunnel toward Router 2, then attach the host-facing interface.
+Create the VXLAN overlay on Router 1 by building a bridge and a VNI 10 tunnel, then attach the host-facing interface. In static mode, the tunnel points directly to Router 2. In dynamic multicast mode, Router 1 sends VXLAN traffic to the multicast group instead of a fixed remote IP.
 
 ### Command Breakdown
 * `ip link add br0 type bridge` creates a Linux bridge named `br0`.
@@ -84,7 +93,8 @@ Create the VXLAN overlay on Router 1 by building a bridge and a VNI 10 tunnel to
 * `ip link add vxlan10 type vxlan` creates the VXLAN tunnel device.
 * `id 10` selects VXLAN Network Identifier 10.
 * `dev eth1` uses the underlay interface for VXLAN encapsulation.
-* `remote 10.1.1.2` sets Router 2 as the VXLAN peer.
+* `remote 10.1.1.2` sets Router 2 as the VXLAN peer in static mode.
+* `group 239.1.1.1` sets the multicast group used by dynamic multicast mode.
 * `local 10.1.1.1` configures Router 1’s local source IP for the tunnel.
 * `dstport 4789` uses the standard VXLAN UDP port.
 * `ip link set vxlan10 up` brings the VXLAN tunnel online.
@@ -92,7 +102,7 @@ Create the VXLAN overlay on Router 1 by building a bridge and a VNI 10 tunnel to
 * `ip link set vxlan10 master br0` attaches the VXLAN tunnel to the bridge.
 
 ### Result
-Router 1 is now capable of forwarding local host traffic into the VXLAN overlay toward Router 2.
+Router 1 is now capable of forwarding local host traffic into the VXLAN overlay, either directly toward Router 2 in static mode or through the multicast group in dynamic multicast mode.
 
 ### On router 2
 ```bash
@@ -101,7 +111,13 @@ ip link add br0 type bridge
 ip link set br0 up
 
 # 2. Create the VXLAN interface (pointing back to Router 1)
+# Choose ONE mode:
+# Do not run both commands below.
+# Static mode (point-to-point)
 ip link add vxlan10 type vxlan id 10 dev eth1 remote 10.1.1.1 local 10.1.1.2 dstport 4789
+
+# Dynamic multicast mode (multicast discovery)
+ip link add vxlan10 type vxlan id 10 dev eth1 group 239.1.1.1 local 10.1.1.2 dstport 4789
 ip link set vxlan10 up
 
 # 3. Connect the Host-facing interface (e.g., eth2) and the VXLAN to the bridge
@@ -110,7 +126,7 @@ ip link set vxlan10 master br0
 ```
 
 ### Purpose
-Create the VXLAN overlay on Router 2 by building the bridge and tunnel back to Router 1, then attach its local host-facing port.
+Create the VXLAN overlay on Router 2 by building the bridge and tunnel, then attach its local host-facing port. In static mode, Router 2 points back to Router 1. In dynamic multicast mode, Router 2 joins the same multicast group as Router 1.
 
 ### Command Breakdown
 * `ip link add br0 type bridge` creates the bridge device.
@@ -118,7 +134,8 @@ Create the VXLAN overlay on Router 2 by building the bridge and tunnel back to R
 * `ip link add vxlan10 type vxlan` creates the VXLAN device for Router 2.
 * `id 10` sets the overlay VNI to 10.
 * `dev eth1` uses the underlay interface for VXLAN traffic.
-* `remote 10.1.1.1` points the tunnel at Router 1.
+* `remote 10.1.1.1` points the tunnel at Router 1 in static mode.
+* `group 239.1.1.1` joins the same multicast group used by Router 1 in dynamic multicast mode.
 * `local 10.1.1.2` sets Router 2’s source IP for the VXLAN source address.
 * `dstport 4789` configures standard VXLAN UDP encapsulation.
 * `ip link set vxlan10 up` brings the VXLAN tunnel online.
@@ -126,7 +143,7 @@ Create the VXLAN overlay on Router 2 by building the bridge and tunnel back to R
 * `ip link set vxlan10 master br0` attaches the VXLAN tunnel to the bridge.
 
 ### Result
-Router 2 is prepared to forward traffic between its local host segment and the VXLAN overlay toward Router 1.
+Router 2 is prepared to forward traffic between its local host segment and the VXLAN overlay, either directly toward Router 1 in static mode or through the shared multicast group in dynamic multicast mode.
 
 # 3 - Host IP Assignment
 Finally, give your hosts IP addresses in the same subnet. They don't know the routers or the VXLAN exist; they think they are on a simple LAN.
